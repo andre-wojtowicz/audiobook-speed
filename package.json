@@ -1,0 +1,16 @@
+{
+  "name": "audiobook-mp3-speed-converter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "fetch:ffmpeg": "node scripts/download_ffmpeg.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "CC-0",
+  "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/core": "^0.12.6"
+  }
+}
