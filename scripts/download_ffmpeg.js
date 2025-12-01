@@ -3,7 +3,7 @@ const path = require("path");
 
 function cp(src, dst) {
     if (!fs.existsSync(src)) {
-        console.log("❌ brak", src);
+        console.log("❌ not found", src);
         return;
     }
     fs.copyFileSync(src, dst);
@@ -13,7 +13,6 @@ function cp(src, dst) {
 const out = "public/libs/ffmpeg";
 fs.mkdirSync(out, { recursive: true });
 
-// z @ffmpeg/ffmpeg
 const ffmpegESM = "node_modules/@ffmpeg/ffmpeg/dist/esm";
 
 [
@@ -27,8 +26,7 @@ const ffmpegESM = "node_modules/@ffmpeg/ffmpeg/dist/esm";
     cp(path.join(ffmpegESM, f), path.join(out, f))
 );
 
-// z @ffmpeg/core
 cp("node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js",  `${out}/ffmpeg-core.js`);
 cp("node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm", `${out}/ffmpeg-core.wasm`);
 
-console.log("\nFFmpeg WASM gotowe.");
+console.log("\nFFmpeg WASM ready.");
