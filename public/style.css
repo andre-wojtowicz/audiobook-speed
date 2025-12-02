@@ -77,7 +77,7 @@ html,body { margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", 
 
 .files-panel { margin-top:16px; }
 .file-list { margin-top:8px; background:var(--glass); padding:12px; border-radius:10px; min-height:64px; }
-.file-item { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:10px; border-radius:8px; background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent); margin-bottom:8px; border:1px solid rgba(255,255,255,0.02); }
+.file-item { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:10px; border-radius:8px; background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent); margin-bottom:8px; border:1px solid rgba(255,255,255,0.02); flex-direction: column; }
 .file-left { display:flex; gap:12px; align-items:center; flex:1; }
 .file-meta { display:flex; gap:12px; align-items:flex-start; flex-direction:column; }
 .filename { font-weight:700; font-size:1rem; }
