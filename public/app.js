@@ -136,10 +136,10 @@ async function renderFileList(){
         item.innerHTML = `
             <div class="file-meta">
                 <div class="filename">${escapeHtml(file.name)}</div>
-                <div class="small-muted">Author: ${escapeHtml(info.author || "Unknown")}</div>
-                <div class="small-muted">Album: ${escapeHtml(info.album || "Unknown")}</div>
-                <div class="small-muted">Title: ${escapeHtml(info.title || "Unknown")}</div>
-                <div class="small-muted">Duration: ${formatTime(info.duration)} | Size: ${formatSize(file.size)} | Bitrate: ${info.bitrate} kbps</div>
+                <div class="small-muted"><b>Author</b>: ${escapeHtml(info.author || "Unknown")}</div>
+                <div class="small-muted"><b>Album</b>: ${escapeHtml(info.album || "Unknown")}</div>
+                <div class="small-muted"><b>Title</b>: ${escapeHtml(info.title || "Unknown")}</div>
+                <div class="small-muted"><b>Duration</b>: ${formatTime(info.duration)} | <b>Size</b>: ${formatSize(file.size)} | <b>Bitrate</b>: ${info.bitrate} kbps</div>
             </div>
             <div class="progress-wrap" style="display:none;"><div class="progress"></div></div>
             <div class="small-muted file-status"></div>
