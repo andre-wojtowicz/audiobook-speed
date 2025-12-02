@@ -26,6 +26,9 @@ jobs:
 
       - name: Fetch FFmpeg WASM
         run: npm run fetch:ffmpeg
+        
+      - name: Fetch JSzip
+        run: npm run fetch:jszip
 
       - name: Prepare public output
         run: |
