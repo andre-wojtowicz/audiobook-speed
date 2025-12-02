@@ -293,4 +293,9 @@ clearBtn.addEventListener("click", ()=>{
 });
 
 // INIT
-window.addEventListener("DOMContentLoaded", loadFFmpeg);
+window.addEventListener("DOMContentLoaded", async () => {
+    speedInput.value = 1.30;              
+    speedValue.textContent = "x1.30";     
+
+    await loadFFmpeg();   // uruchamia Twoje FFmpeg
+});
