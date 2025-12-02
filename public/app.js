@@ -231,44 +231,119 @@ speedInput.addEventListener("input", () => {
 
 // ===== CONVERT SINGLE FILE =====
 async function convertSingle(file, progressBar, statusEl) {
-    const info = await probeFile(file);
+    const info = await probeFile(file); // zapewnia duration i bitrate
     const speed = parseFloat(speedInput.value);
     const inputName = file.name;
     const outputName = inputName.replace(/\.mp3$/i, `-x${speed}.mp3`);
-
     const buf = await file.arrayBuffer();
     const inputData = safeCopy(new Uint8Array(buf));
 
     await ffmpeg.writeFile(inputName, inputData);
 
-    let callback = ({ ratio }) => {
-        const p = Math.round(ratio * 100);
-        progressBar.style.width = p + "%";
-        statusEl.textContent = `Converting... ${p}%`;
-    };
-    ffmpeg.setProgress(callback);
+    // --- PROGRESS SETUP ---
+    let fallbackInterval = null;
+    let loggerWasSet = false;
+    let originalLogger = null;
+    let lastPct = 0;
 
-    const filter = buildAtempo(speed);
+    // helper: parse time=00:01:23.45 into seconds
+    function parseTimeFromLine(line) {
+        const m = line.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+        if (!m) return null;
+        const h = Number(m[1]), mm = Number(m[2]), ss = Number(m[3]);
+        return h*3600 + mm*60 + ss;
+    }
 
-    await ffmpeg.exec([
-        "-i", inputName,
-        "-af", filter,
-        "-codec:a", "libmp3lame",
-        "-b:a", info.bitrate + "k",
-        "-map_metadata", "0",
-        "-id3v2_version", "3",
-        outputName
-    ]);
+    // try setProgress if available
+    if (ffmpeg && typeof ffmpeg.setProgress === "function") {
+        try {
+            ffmpeg.setProgress(({ ratio }) => {
+                const p = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+                lastPct = p;
+                if (progressBar) progressBar.style.width = p + "%";
+                if (statusEl) statusEl.textContent = `Converting... ${p}%`;
+            });
+        } catch (e) {
+            // ignore and fallback to logger
+        }
+    }
 
-    ffmpeg.setProgress(() => {});
+    // if setProgress not available, try setLogger to parse stderr lines
+    if ((!ffmpeg || typeof ffmpeg.setProgress !== "function") && ffmpeg && typeof ffmpeg.setLogger === "function") {
+        try {
+            originalLogger = ffmpeg._logger || null; // best-effort
+            ffmpeg.setLogger(({ type, message }) => {
+                // message may contain "time=HH:MM:SS.xx"
+                const t = parseTimeFromLine(message);
+                if (t !== null && info.duration && info.duration > 0) {
+                    let pct = Math.round((t / info.duration) * 100);
+                    pct = Math.max(0, Math.min(100, pct));
+                    lastPct = pct;
+                    if (progressBar) progressBar.style.width = pct + "%";
+                    if (statusEl) statusEl.textContent = `Converting... ${pct}%`;
+                } else {
+                    // optional: try to parse percentage-like lines (rare)
+                }
+            });
+            loggerWasSet = true;
+        } catch (e) {
+            loggerWasSet = false;
+        }
+    }
 
+    // final fallback: simulated incremental progress so UI isn't frozen
+    if ((!ffmpeg || typeof ffmpeg.setProgress !== "function") && !loggerWasSet) {
+        let fake = lastPct || 0;
+        fallbackInterval = setInterval(() => {
+            fake = Math.min(95, fake + Math.floor(Math.random() * 6) + 2);
+            if (progressBar) progressBar.style.width = fake + "%";
+            if (statusEl) statusEl.textContent = `Converting... ${fake}%`;
+            lastPct = fake;
+        }, 500);
+    }
+
+    // --- EXECUTE CONVERSION ---
+    try {
+        await ffmpeg.exec([
+            "-i", inputName,
+            "-af", buildAtempo(speed),
+            "-codec:a", "libmp3lame",
+            "-b:a", (info.bitrate || 128) + "k",
+            "-map_metadata", "0",
+            "-id3v2_version", "3",
+            outputName
+        ]);
+    } finally {
+        // cleanup progress listeners
+        try {
+            if (typeof ffmpeg.setProgress === "function") {
+                try { ffmpeg.setProgress(() => {}); } catch (e) {}
+            }
+        } catch (_) {}
+
+        if (loggerWasSet && typeof ffmpeg.setLogger === "function") {
+            try { ffmpeg.setLogger(() => {}); } catch (e) {}
+        }
+        if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+        }
+    }
+
+    // --- READ OUTPUT ---
     const out = await ffmpeg.readFile(outputName);
 
-    try { ffmpeg.deleteFile(inputName); } catch {}
-    try { ffmpeg.deleteFile(outputName); } catch {}
+    // remove files from ffmpeg FS
+    try { ffmpeg.deleteFile(inputName); } catch(e) {}
+    try { ffmpeg.deleteFile(outputName); } catch(e) {}
+
+    // finalize UI
+    if (progressBar) progressBar.style.width = "100%";
+    if (statusEl) statusEl.textContent = `Done (${formatSize(out.length)})`;
 
     return out;
 }
+
 
 function buildAtempo(speed) {
     const parts = [];
