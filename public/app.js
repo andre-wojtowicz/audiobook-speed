@@ -409,6 +409,12 @@ convertBtn.addEventListener("click", async () => {
     clearBtn.disabled = true;
 
     const items = Array.from(fileListEl.querySelectorAll(".file-item"));
+    for (const item of items) {
+        const bar = item.querySelector(".progress");
+        const statusEl = item.querySelector(".file-status");
+        bar.style.width = "0%";
+        statusEl.textContent = "Ready";
+    }
     convertedCache = {};
     globalProcessed = 0;
 
@@ -495,6 +501,12 @@ zipBtn.addEventListener("click", async ()=>{
     clearBtn.disabled = true;
 
     const items = Array.from(fileListEl.querySelectorAll(".file-item"));
+    for (const item of items) {
+        const bar = item.querySelector(".progress");
+        const statusEl = item.querySelector(".file-status");
+        bar.style.width = "0%";
+        statusEl.textContent = "Ready";
+    }
     globalProcessed = 0;
 
     const totalFiles = currentFiles.length;
