@@ -5,6 +5,7 @@ let convertedCache = {};
 let probeCache = {};
 let zipInstance = new JSZip();
 let globalProcessed = 0;
+let isProcessing = false;
 
 // ===== DOM =====
 const fileInput = document.getElementById("fileInput");
@@ -18,10 +19,13 @@ const convertBtn = document.getElementById("convertBtn");
 const zipBtn = document.getElementById("zipBtn");
 const clearBtn = document.getElementById("clearBtn");
 const statusSmall = document.getElementById("statusSmall");
+const controlsTime = document.querySelector(".controls-time");
+const controlsButtons = document.querySelector(".controls-buttons");
 const globalProgressWrap = document.getElementById("globalProgressWrap");
 const globalProgress = document.getElementById("globalProgress");
 const filesPanel = document.querySelector(".files-panel");
 const globalStatus = document.getElementById("globalStatus");
+const panels = [dropZone, filesPanel, controlsTime, controlsButtons, document.querySelector(".log-panel")];
 
 // HELPERS
 function log(msg) {
@@ -227,13 +231,26 @@ function updateTimeSummary(){
     }
 
     const speed = parseFloat(speedInput.value);
-    const totalAfter = totalBefore / speed;
-    const diff = totalAfter - totalBefore;
+    const totalBeforeSeconds = Math.floor(totalBefore);
+    const totalAfterSeconds = Math.floor(totalBeforeSeconds / speed);
+    const diff = totalAfterSeconds - totalBeforeSeconds;
+    const diffClass = diff > 0 ? "diff-positive" : diff < 0 ? "diff-negative" : "diff-zero";
+    const diffLabel = diff > 0 ? "+" + formatTime(diff) : diff < 0 ? "-" + formatTime(Math.abs(diff)) : formatTime(0);
 
-    timeSummaryEl.textContent =
-        `Total before conversion: ${formatTime(totalBefore)} | ` +
-        `Total after conversion: ${formatTime(totalAfter)} | ` +
-        `Difference: ${diff >= 0 ? "" : "-"}${formatTime(Math.abs(diff))}`;
+    timeSummaryEl.innerHTML =
+        `<strong>Total before conversion:</strong> ${formatTime(totalBeforeSeconds)} | ` +
+        `<strong>Total after conversion:</strong> ${formatTime(totalAfterSeconds)} | ` +
+        `<strong>Difference:</strong> <span class="${diffClass}">${diffLabel}</span>`;
+}
+
+function updateSpeedDisplay(){
+    const val = parseFloat(speedInput.value);
+    const min = parseFloat(speedInput.min);
+    const max = parseFloat(speedInput.max);
+    const pct = Math.min(1, Math.max(0, (val - min) / (max - min)));
+
+    speedValue.textContent = "x" + val.toFixed(2);
+    speedValue.style.left = `${pct * 100}%`;
 }
 
 // ADD FILES
@@ -286,7 +303,7 @@ fileInput.addEventListener("change", e=>{
 
 // SPEED SLIDER
 speedInput.addEventListener("input", ()=>{
-    speedValue.textContent = "x"+parseFloat(speedInput.value).toFixed(2);
+    updateSpeedDisplay();
     updateTimeSummary();
 });
 
@@ -404,87 +421,85 @@ convertBtn.addEventListener("click", async () => {
     await loadFFmpeg();
     log("Starting conversion...");
 
-    convertBtn.disabled = true;
-    zipBtn.disabled = true;
-    clearBtn.disabled = true;
+    setProcessingState(true);
 
-    const items = Array.from(fileListEl.querySelectorAll(".file-item"));
-    for (const item of items) {
-        const bar = item.querySelector(".progress");
-        const statusEl = item.querySelector(".file-status");
-        bar.style.width = "0%";
-        statusEl.textContent = "Ready";
-    }
-    convertedCache = {};
-    globalProcessed = 0;
-
-    const totalFiles = currentFiles.length;
-    const perFilePct = 100 / totalFiles;
-
-    globalProgressWrap.style.display = "block";
-    globalProgress.style.width = "0%";
-    globalStatus.textContent = `Ready`;
-
-    let idx = 0;
-    for (const file of currentFiles) {
-        const item = items[idx++];
-        const statusEl = item.querySelector(".file-status");
-        const wrap = item.querySelector(".progress-wrap");
-        const bar = item.querySelector(".progress");
-
-        wrap.style.display = "block";
-        bar.style.width = "0%";
-        statusEl.textContent = "Preparing...";
-
-        const basePct = Math.round(globalProcessed * perFilePct);
-        globalProgress.style.width = basePct + "%";
-        globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${basePct}%`;
-
-        try {
-            const result = await convertSingle(file, bar, statusEl, (localPct) => {
-                const combined = Math.round((globalProcessed * perFilePct) + (localPct / 100) * perFilePct);
-                globalProgress.style.width = combined + "%";
-                globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${combined}%`;
-            });
-
-            statusEl.textContent = "Done";
-            bar.style.width = "100%";
-
-            const blob = new Blob([result.buffer], { type: "audio/mpeg" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = file.name.replace(/\.mp3$/i, `-x${speedInput.value}.mp3`);
-            a.click();
-            URL.revokeObjectURL(url);
-
-            convertedCache[file.name] = result;
-
-            globalProcessed++;
-            const newBasePct = Math.round(globalProcessed * perFilePct);
-            globalProgress.style.width = newBasePct + "%";
-
-            if (globalProcessed < totalFiles) {
-                globalStatus.textContent = `${globalProcessed}/${totalFiles} Converting... ${newBasePct}%`;
-            } else {
-                globalStatus.textContent = `Done – 100%`;
-            }
-
-        } catch (e) {
-            console.error(e);
-            statusEl.textContent = "ERROR";
-            globalStatus.textContent = `ERROR converting ${file.name}`;
-            log("Error converting " + file.name + ": " + (e.message || e));
+    try {
+        const items = Array.from(fileListEl.querySelectorAll(".file-item"));
+        for (const item of items) {
+            const bar = item.querySelector(".progress");
+            const statusEl = item.querySelector(".file-status");
+            bar.style.width = "0%";
+            statusEl.textContent = "Ready";
         }
+        convertedCache = {};
+        globalProcessed = 0;
+
+        const totalFiles = currentFiles.length;
+        const perFilePct = 100 / totalFiles;
+
+        globalProgressWrap.style.display = "block";
+        globalProgress.style.width = "0%";
+        globalStatus.textContent = `Ready`;
+
+        let idx = 0;
+        for (const file of currentFiles) {
+            const item = items[idx++];
+            const statusEl = item.querySelector(".file-status");
+            const wrap = item.querySelector(".progress-wrap");
+            const bar = item.querySelector(".progress");
+
+            wrap.style.display = "block";
+            bar.style.width = "0%";
+            statusEl.textContent = "Preparing...";
+
+            const basePct = Math.round(globalProcessed * perFilePct);
+            globalProgress.style.width = basePct + "%";
+            globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${basePct}%`;
+
+            try {
+                const result = await convertSingle(file, bar, statusEl, (localPct) => {
+                    const combined = Math.round((globalProcessed * perFilePct) + (localPct / 100) * perFilePct);
+                    globalProgress.style.width = combined + "%";
+                    globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${combined}%`;
+                });
+
+                statusEl.textContent = "Done";
+                bar.style.width = "100%";
+
+                const blob = new Blob([result.buffer], { type: "audio/mpeg" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = file.name.replace(/\.mp3$/i, `-x${speedInput.value}.mp3`);
+                a.click();
+                URL.revokeObjectURL(url);
+
+                convertedCache[file.name] = result;
+
+                globalProcessed++;
+                const newBasePct = Math.round(globalProcessed * perFilePct);
+                globalProgress.style.width = newBasePct + "%";
+
+                if (globalProcessed < totalFiles) {
+                    globalStatus.textContent = `${globalProcessed}/${totalFiles} Converting... ${newBasePct}%`;
+                } else {
+                    globalStatus.textContent = `Done – 100%`;
+                }
+
+            } catch (e) {
+                console.error(e);
+                statusEl.textContent = "ERROR";
+                globalStatus.textContent = `ERROR converting ${file.name}`;
+                log("Error converting " + file.name + ": " + (e.message || e));
+            }
+        }
+
+        log("All conversions finished.");
+        globalProgress.style.width = "100%";
+        globalStatus.textContent = "Done";
+    } finally {
+        setProcessingState(false);
     }
-
-    log("All conversions finished.");
-    globalProgress.style.width = "100%";
-    globalStatus.textContent = "Done";
-
-    convertBtn.disabled = !(currentFiles.length > 0);
-    zipBtn.disabled = !(currentFiles.length > 0);
-    clearBtn.disabled = false;
 });
 
 
@@ -493,93 +508,91 @@ zipBtn.addEventListener("click", async ()=>{
     if(!currentFiles.length) return alert("No files selected");
     await loadFFmpeg();
 
-    zipInstance = new JSZip();
-    log("Creating ZIP...");
-
-    convertBtn.disabled = true;
-    zipBtn.disabled = true;
-    clearBtn.disabled = true;
-
-    const items = Array.from(fileListEl.querySelectorAll(".file-item"));
-    for (const item of items) {
-        const bar = item.querySelector(".progress");
-        const statusEl = item.querySelector(".file-status");
-        bar.style.width = "0%";
-        statusEl.textContent = "Ready";
-    }
-    globalProcessed = 0;
-
-    const totalFiles = currentFiles.length;
-    const perFilePct = 100 / totalFiles;
-
-    globalProgressWrap.style.display = "block";
-    globalProgress.style.width = "0%";
-    globalStatus.textContent = "Ready";
-
-    let idx = 0;
-    for (const file of currentFiles) {
-        const item = items[idx++];
-        const statusEl = item.querySelector(".file-status");
-        const wrap = item.querySelector(".progress-wrap");
-        const bar = item.querySelector(".progress");
-
-        wrap.style.display = "block";
-        bar.style.width = "0%";
-        statusEl.textContent = "Preparing...";
-
-        const basePct = Math.round(globalProcessed * perFilePct);
-        globalProgress.style.width = basePct + "%";
-        globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${basePct}%`;
-
-        try {
-            const result = await convertSingle(file, bar, statusEl, (localPct) => {
-                const combined = Math.round((globalProcessed * perFilePct) + (localPct / 100) * perFilePct);
-                globalProgress.style.width = combined + "%";
-                globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${combined}%`;
-            });
-
-            statusEl.textContent = "Done";
-            bar.style.width = "100%";
-
-            const outName = file.name.replace(/\.mp3$/i, `-x${speedInput.value}.mp3`);
-            zipInstance.file(outName, result);
-
-            globalProcessed++;
-            const newBasePct = Math.round(globalProcessed * perFilePct);
-            globalProgress.style.width = newBasePct + "%";
-
-            if (globalProcessed < totalFiles) {
-                globalStatus.textContent = `${globalProcessed}/${totalFiles} Converting... ${newBasePct}%`;
-            } else {
-                globalStatus.textContent = `Done – 100%`;
-            }
-        } catch (e) {
-            console.error(e);
-            statusEl.textContent = "ERROR";
-            globalStatus.textContent = `ERROR converting ${file.name}`;
-            log("Error converting " + file.name + ": " + (e.message || e));
-        }
-    }
+    setProcessingState(true);
 
     try {
-        const blob = await zipInstance.generateAsync({type:"blob"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "converted.zip";
-        a.click();
-        URL.revokeObjectURL(url);
-        log("ZIP ready.");
-    } catch (e) {
-        log("Error generating ZIP: " + (e.message || e));
+        zipInstance = new JSZip();
+        log("Creating ZIP...");
+
+        const items = Array.from(fileListEl.querySelectorAll(".file-item"));
+        for (const item of items) {
+            const bar = item.querySelector(".progress");
+            const statusEl = item.querySelector(".file-status");
+            bar.style.width = "0%";
+            statusEl.textContent = "Ready";
+        }
+        globalProcessed = 0;
+
+        const totalFiles = currentFiles.length;
+        const perFilePct = 100 / totalFiles;
+
+        globalProgressWrap.style.display = "block";
+        globalProgress.style.width = "0%";
+        globalStatus.textContent = "Ready";
+
+        let idx = 0;
+        for (const file of currentFiles) {
+            const item = items[idx++];
+            const statusEl = item.querySelector(".file-status");
+            const wrap = item.querySelector(".progress-wrap");
+            const bar = item.querySelector(".progress");
+
+            wrap.style.display = "block";
+            bar.style.width = "0%";
+            statusEl.textContent = "Preparing...";
+
+            const basePct = Math.round(globalProcessed * perFilePct);
+            globalProgress.style.width = basePct + "%";
+            globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${basePct}%`;
+
+            try {
+                const result = await convertSingle(file, bar, statusEl, (localPct) => {
+                    const combined = Math.round((globalProcessed * perFilePct) + (localPct / 100) * perFilePct);
+                    globalProgress.style.width = combined + "%";
+                    globalStatus.textContent = `${globalProcessed + 1}/${totalFiles} Converting... ${combined}%`;
+                });
+
+                statusEl.textContent = "Done";
+                bar.style.width = "100%";
+
+                const outName = file.name.replace(/\.mp3$/i, `-x${speedInput.value}.mp3`);
+                zipInstance.file(outName, result);
+
+                globalProcessed++;
+                const newBasePct = Math.round(globalProcessed * perFilePct);
+                globalProgress.style.width = newBasePct + "%";
+
+                if (globalProcessed < totalFiles) {
+                    globalStatus.textContent = `${globalProcessed}/${totalFiles} Converting... ${newBasePct}%`;
+                } else {
+                    globalStatus.textContent = `Done – 100%`;
+                }
+            } catch (e) {
+                console.error(e);
+                statusEl.textContent = "ERROR";
+                globalStatus.textContent = `ERROR converting ${file.name}`;
+                log("Error converting " + file.name + ": " + (e.message || e));
+            }
+        }
+
+        try {
+            const blob = await zipInstance.generateAsync({type:"blob"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "converted.zip";
+            a.click();
+            URL.revokeObjectURL(url);
+            log("ZIP ready.");
+        } catch (e) {
+            log("Error generating ZIP: " + (e.message || e));
+        }
+
+        globalStatus.textContent = "Done";
+        globalProgress.style.width = "100%";
+    } finally {
+        setProcessingState(false);
     }
-
-    globalStatus.textContent = "Done";
-    globalProgress.style.width = "100%";
-
-    convertBtn.disabled = !(currentFiles.length > 0);
-    zipBtn.disabled = !(currentFiles.length > 0);
-    clearBtn.disabled = false;
 });
 
 
@@ -611,13 +624,30 @@ clearBtn.addEventListener("click", ()=>{
 function updateUIState() {
     const hasFiles = currentFiles.length > 0;
 
-    convertBtn.disabled = !hasFiles;
-    zipBtn.disabled = !hasFiles;
+    convertBtn.disabled = isProcessing || !hasFiles;
+    zipBtn.disabled = isProcessing || !hasFiles;
 
     globalProgressWrap.style.display = hasFiles ? "block" : "none";
     globalProgress.style.width = "0%";
 
     clearBtn.style.display = hasFiles ? "inline-block" : "none";
+    controlsTime.classList.toggle("hidden", !hasFiles);
+    controlsButtons.classList.toggle("hidden", !hasFiles);
+}
+
+function setProcessingState(processing) {
+    isProcessing = processing;
+    const toggle = processing ? "add" : "remove";
+
+    panels.forEach(p => {
+        if (p) p.classList[toggle]("panel-disabled");
+    });
+
+    [fileInput, speedInput, convertBtn, zipBtn, clearBtn].forEach(el => {
+        if (el) el.disabled = processing || (el === convertBtn || el === zipBtn ? !currentFiles.length : false);
+    });
+
+    updateUIState();
 }
 
 // INIT
@@ -630,7 +660,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     fileInput.value = "";
 
     speedInput.value = 1.30;
-    speedValue.textContent = "x1.30";
+    updateSpeedDisplay();
     updateTimeSummary();
     updateUIState();
     await loadFFmpeg();
