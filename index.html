@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Audiobook MP3 Speed Converter</title>
+
+    <link rel="stylesheet" href="./style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+
+    <script type="module">
+        import { FFmpeg } from "./libs/ffmpeg/classes.js";
+        window.ffmpegModule = { FFmpeg };
+    </script>
+
+    <script src="./libs/jszip.min.js"></script>
+
+    <script defer src="./app.js"></script>
+</head>
+<body>
+    <main class="container">
+        <header class="header">
+            <h1>🎧 Audiobook MP3 Speed Converter</h1>
+            <p class="subtitle">Fast audiobook speed adjustments with FFmpeg WASM</p>
+        </header>
+
+        <section class="panel">
+            <div id="dropZone" class="dropzone" title="Click to select or drop MP3 files">
+                <input id="fileInput" class="fileInput" type="file" accept=".mp3" multiple>
+
+                <div class="drop-content">
+                    <svg class="icon" viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
+                        <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18L5.33 9h3.67v6h6V9h3.67L12 2z"/>
+                    </svg>
+                    <div>
+                        <strong>Drag & drop MP3 files here</strong>
+                        <div class="muted">or click to select (only .mp3)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="files-panel" style="display:none;">
+                <div class="panel-block">
+                    <div class="panel-header">
+                        <h2>📂 Selected files</h2>
+                    </div>
+                    <div id="fileList" class="file-list">
+                        <div class="muted">No files selected</div>
+                    </div>
+                    <div class="file-actions">
+                        <button id="clearBtn" class="btn danger clear-bottom-btn" style="display:none;">
+                            🗑️ Clear all files
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-time">
+                <h2>⏩ New playback speed</h2>
+                <div class="speed-slider-wrap">
+                    <div class="speed-bubble" id="speedValue">x1.30</div>
+                    <input id="speedInput" type="range" min="0.5" max="2.0" step="0.05" value="1.30" class="slider">
+                </div>
+                <div id="timeSummary" class="small-muted time-summary">
+                    <strong>Total before conversion:</strong> 00:00:00 | <strong>Total after conversion:</strong> 00:00:00 | <strong>Difference:</strong> 00:00:00
+                </div>
+            </div>
+
+            <div class="controls-buttons">
+                <h2>📥 Convert & download</h2>
+                <div class="button-actions">
+                    <button id="convertBtn" class="btn primary" disabled>🎶 As separate MP3 files</button>
+                    <button id="zipBtn" class="btn secondary" disabled>📦 As one ZIP file</button>
+                </div>
+            </div>
+
+            <div id="globalProgressWrap" class="global-progress-block" style="display:none; margin-top: 18px;">
+                <h2>🚀 Progress</h2>
+                <div class="progress-wrap">
+                    <div class="progress-inner">
+                        <div id="globalProgress" class="progress"></div>
+                    </div>
+                </div>
+                <div id="globalStatus" class="small-muted file-status" style="margin-top:6px;">Ready</div>
+            </div>
+
+            <div class="log-panel">
+                <div class="panel-block">
+                    <div class="panel-header">
+                        <h2>📝 Log</h2>
+                        <span id="statusSmall" class="muted"></span>
+                    </div>
+                    <div id="log" class="log"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
